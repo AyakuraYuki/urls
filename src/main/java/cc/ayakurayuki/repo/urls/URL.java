@@ -57,6 +57,10 @@ public class URL implements Serializable {
   private String   fragment    = "";    // fragment for references, without '#'
   private String   rawFragment = "";    // encoded fragment hint (see EscapedFragment method)
 
+  public static URL.Builder builder() {
+    return new Builder();
+  }
+
   public URL deepClone() {
     URL url = new URL();
     url.scheme = this.scheme;
@@ -352,6 +356,24 @@ public class URL implements Serializable {
     return this;
   }
 
+  // -------------------- constructors -------------------- //
+
+  public URL() {}
+
+  public URL(String scheme, String opaque, Userinfo user, String host, String path, String rawPath, boolean omitHost, boolean forceQuery, String rawQuery, String fragment, String rawFragment) {
+    this.scheme = scheme;
+    this.opaque = opaque;
+    this.user = user;
+    this.host = host;
+    this.path = path;
+    this.rawPath = rawPath;
+    this.omitHost = omitHost;
+    this.forceQuery = forceQuery;
+    this.rawQuery = rawQuery;
+    this.fragment = fragment;
+    this.rawFragment = rawFragment;
+  }
+
   // -------------------- accessors -------------------- //
 
   public String getScheme() {
@@ -472,6 +494,115 @@ public class URL implements Serializable {
 
   public void setRawFragment(String rawFragment) {
     this.rawFragment = rawFragment;
+  }
+
+  // -------------------- builder -------------------- //
+
+  public static class Builder {
+
+    private String   scheme      = "";
+    private String   opaque      = "";
+    private Userinfo user        = null;
+    private String   host        = "";
+    private String   path        = "";
+    private String   rawPath     = "";
+    private boolean  omitHost    = false;
+    private boolean  forceQuery  = false;
+    private String   rawQuery    = "";
+    private String   fragment    = "";
+    private String   rawFragment = "";
+
+    Builder() {}
+
+    public Builder scheme(String scheme) {
+      this.scheme = scheme;
+      return this;
+    }
+
+    public Builder opaque(String opaque) {
+      this.opaque = opaque;
+      return this;
+    }
+
+    public Builder user(Userinfo user) {
+      this.user = user;
+      return this;
+    }
+
+    public Builder host(String host) {
+      this.host = host;
+      return this;
+    }
+
+    public Builder path(String path) {
+      this.path = path;
+      return this;
+    }
+
+    public Builder rawPath(String rawPath) {
+      this.rawPath = rawPath;
+      return this;
+    }
+
+    public Builder omitHost(boolean omitHost) {
+      this.omitHost = omitHost;
+      return this;
+    }
+
+    public Builder forceQuery(boolean forceQuery) {
+      this.forceQuery = forceQuery;
+      return this;
+    }
+
+    public Builder rawQuery(String rawQuery) {
+      this.rawQuery = rawQuery;
+      return this;
+    }
+
+    public Builder fragment(String fragment) {
+      this.fragment = fragment;
+      return this;
+    }
+
+    public Builder rawFragment(String rawFragment) {
+      this.rawFragment = rawFragment;
+      return this;
+    }
+
+    public URL build() {
+      return new URL(
+          this.scheme,
+          this.opaque,
+          this.user,
+          this.host,
+          this.path,
+          this.rawPath,
+          this.omitHost,
+          this.forceQuery,
+          this.rawQuery,
+          this.fragment,
+          this.rawFragment
+      );
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "URL.Builder(scheme=%s, opaque=%s, user=%s, host=%s, path=%s, rawPath=%s, omitHost=%b, forceQuery=%b, rawQuery=%s, fragment=%s, rawFragment=%s)",
+          this.scheme,
+          this.opaque,
+          this.user,
+          this.host,
+          this.path,
+          this.rawPath,
+          this.omitHost,
+          this.forceQuery,
+          this.rawQuery,
+          this.fragment,
+          this.rawFragment
+      );
+    }
+
   }
 
 }

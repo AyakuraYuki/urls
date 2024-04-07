@@ -1,7 +1,7 @@
 package cc.ayakurayuki.repo.urls;
 
-import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
@@ -22,7 +22,7 @@ public class Values extends HashMap<String, List<String>> {
   private static final long serialVersionUID = -6169209659977938504L;
 
   /**
-   * Gets the first value associated with the given key.
+   * value gets the first value associated with the given key.
    * If there are no values associated with the key, Get returns
    * the empty string. To access multiple values, use the map
    * directly.
@@ -39,7 +39,7 @@ public class Values extends HashMap<String, List<String>> {
    * Sets the key to value. It replaces any existing values.
    */
   public void set(String key, String value) {
-    List<String> vs = new ArrayList<>();
+    List<String> vs = new LinkedList<>();
     vs.add(value);
     super.put(key, vs);
   }
