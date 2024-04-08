@@ -496,6 +496,35 @@ public class URL implements Serializable {
     this.rawFragment = rawFragment;
   }
 
+  // -------------------- equals and hashcode -------------------- //
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    URL url = (URL) o;
+    return omitHost == url.omitHost
+        && forceQuery == url.forceQuery
+        && Objects.equals(scheme, url.scheme)
+        && Objects.equals(opaque, url.opaque)
+        && Objects.equals(user, url.user)
+        && Objects.equals(host, url.host)
+        && Objects.equals(path, url.path)
+        && Objects.equals(rawPath, url.rawPath)
+        && Objects.equals(rawQuery, url.rawQuery)
+        && Objects.equals(fragment, url.fragment)
+        && Objects.equals(rawFragment, url.rawFragment);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(scheme, opaque, user, host, path, rawPath, omitHost, forceQuery, rawQuery, fragment, rawFragment);
+  }
+
   // -------------------- builder -------------------- //
 
   public static class Builder {

@@ -1,6 +1,7 @@
 package cc.ayakurayuki.repo.urls;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * The Userinfo type is an immutable encapsulation of username and
@@ -63,6 +64,25 @@ public class Userinfo implements Serializable {
 
   public Userinfo deepClone() {
     return new Userinfo(this.username, this.password, this.passwordSet);
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    Userinfo userinfo = (Userinfo) o;
+    return passwordSet == userinfo.passwordSet
+        && Objects.equals(username, userinfo.username)
+        && Objects.equals(password, userinfo.password);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(username, password, passwordSet);
   }
 
 }

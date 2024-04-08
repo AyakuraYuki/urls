@@ -109,10 +109,9 @@ public abstract class Paths {
         r += 2;
         if (out.w > dotdot) {
           // can backtrack
-          out.w--;
-          while (out.w > dotdot && out.index(out.w) != '/') {
+          do {
             out.w--;
-          }
+          } while (out.w > dotdot && out.index(out.w) != '/');
         } else if (!rooted) {
           // cannot backtrack, but not rooted, so append .. element.
           if (out.w > 0) {

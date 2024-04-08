@@ -17,6 +17,12 @@ public class UrlException extends RuntimeException {
     this.url = url;
   }
 
+  public UrlException(String op, String url, String message) {
+    super(message);
+    this.op = op;
+    this.url = url;
+  }
+
   public UrlException(String op, String url, Throwable cause) {
     super(cause);
     this.op = op;

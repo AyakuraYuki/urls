@@ -8,9 +8,10 @@ import cc.ayakurayuki.repo.urls.wrapper.Pair;
 import cc.ayakurayuki.repo.urls.wrapper.PairEx;
 import cc.ayakurayuki.repo.urls.wrapper.Result;
 import com.google.common.base.MoreObjects;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * @author Ayakura Yuki
@@ -18,33 +19,17 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class URLs {
 
-  private static final Logger log = LoggerFactory.getLogger(URLs.class);
-
-  private static final String UPPER_HEX = "0123456789ABCDEF";
-
-  private static boolean ishex(char c) {
-    if (Character.isDigit(c)) {
-      return true;
-    }
-    return Character.isLetter(c);
+  private static boolean notHex(char c) {
+    return Character.digit(c, 16) == -1;
   }
 
   private static byte unhex(char c) {
-    if (Character.isDigit(c)) {
-      return (byte) (c - '0');
-    }
-    if (Character.isLetter(c) && Character.isLowerCase(c)) {
-      return (byte) (c - 'a' + 10);
-    }
-    if (Character.isLetter(c) && Character.isUpperCase(c)) {
-      return (byte) (c - 'A' + 10);
-    }
-    return 0;
+    return (byte) Character.digit(c, 16);
   }
 
   private static boolean shouldEscape(char c, Encoding mode) {
     // unreserved characters (alphanum)
-    if (Character.isLetterOrDigit(c)) {
+    if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')) {
       return false;
     }
 
@@ -189,7 +174,7 @@ public abstract class URLs {
       switch (c) {
         case '%':
           n++;
-          if (i + 2 >= s.length() || !ishex(s.charAt(i + 1)) || !ishex(s.charAt(i + 2))) {
+          if (i + 2 >= s.length() || notHex(s.charAt(i + 1)) || notHex(s.charAt(i + 2))) {
             s = s.substring(i);
             if (s.length() > 3) {
               s = s.substring(0, 3);
@@ -239,28 +224,32 @@ public abstract class URLs {
       return s;
     }
 
-    StringBuilder t = new StringBuilder();
-    for (int i = 0; i < s.length(); i++) {
-      char c = s.charAt(i);
-      switch (c) {
-        case '%':
-          int v = unhex(s.charAt(i + 1)) << 4 | unhex(s.charAt(i + 2));
-          t.append((char) v);
-          i += 2;
-          break;
-        case '+':
-          if (mode == Encoding.QueryComponent) {
-            t.append(' ');
-          } else {
-            t.append('+');
-          }
-          break;
-        default:
-          t.append(s.charAt(i));
-          break;
+    try (ByteArrayOutputStream buf = new ByteArrayOutputStream()) {
+
+      for (int i = 0; i < s.length(); i++) {
+        char c = s.charAt(i);
+        switch (c) {
+          case '%':
+            buf.write(unhex(s.charAt(i + 1)) << 4 | unhex(s.charAt(i + 2)));
+            i += 2;
+            break;
+          case '+':
+            if (mode == Encoding.QueryComponent) {
+              buf.write(' ');
+            } else {
+              buf.write('+');
+            }
+            break;
+          default:
+            buf.write(c);
+            break;
+        }
       }
+      return buf.toString(StandardCharsets.UTF_8);
+
+    } catch (IOException e) {
+      return s;
     }
-    return t.toString();
   }
 
   /**
@@ -314,9 +303,10 @@ public abstract class URLs {
       if (c == ' ' && mode == Encoding.QueryComponent) {
         t.append('+');
       } else if (shouldEscape(c, mode)) {
-        t.append('%');
-        t.append(UPPER_HEX.charAt(c >> 4));
-        t.append(UPPER_HEX.charAt(c & 15));
+        byte[] bytes = String.valueOf(c).getBytes(StandardCharsets.UTF_8);
+        for (byte b : bytes) {
+          t.append(String.format("%%%02X", b));
+        }
       } else {
         t.append(c);
       }
@@ -468,7 +458,7 @@ public abstract class URLs {
       }
     }
 
-    if (Strings.isNotEmpty(url.getScheme()) || !viaRequest && !Strings.startsWith(rest, "///") && Strings.startsWith(rest, "//")) {
+    if ((Strings.isNotEmpty(url.getScheme()) || !viaRequest && !Strings.startsWith(rest, "///")) && Strings.startsWith(rest, "//")) {
       String authority = rest.substring(2);
       rest = "";
       int i = authority.indexOf("/");
@@ -575,7 +565,7 @@ public abstract class URLs {
       int zone = Strings.indexOf(host.substring(0, bound), "%25");
       if (zone >= 0) {
         String host1 = unescape(host.substring(0, zone), Encoding.Host);
-        String host2 = unescape(host.substring(zone, bound), Encoding.Host);
+        String host2 = unescape(host.substring(zone, bound), Encoding.Zone);
         String host3 = unescape(host.substring(bound), Encoding.Host);
         return Result.ok(host1 + host2 + host3);
       }
@@ -685,8 +675,7 @@ public abstract class URLs {
       String key = cutResult.getBefore();
       query = cutResult.getAfter();
       if (Strings.contains(key, ";")) {
-        log.error("invalid semicolon seperator in query: {}", query);
-        return;
+        throw new UrlException("ParseQuery", query, "invalid semicolon separator in query");
       }
       if (Strings.isEmpty(key)) {
         continue;

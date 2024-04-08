@@ -1,6 +1,12 @@
 package cc.ayakurayuki.repo.urls;
 
-import java.util.List;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
+import cc.ayakurayuki.repo.urls.Cases.ParseRequestURLTest;
+import cc.ayakurayuki.repo.urls.Cases.StringURLTest;
+import cc.ayakurayuki.repo.urls.Cases.URLTest;
+import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
@@ -11,90 +17,85 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class CaseTest {
 
-  private static class URLTest {
-
-    String in;
-    URL    out; // expected parse
-    String roundtrip; // expected result of reserializing the URL; empty means same as "in"
-
-    public URLTest(String in, URL out, String roundtrip) {
-      this.in = in;
-      this.out = out;
-      this.roundtrip = roundtrip;
+  /**
+   * more useful string for debugging than printf struct printer
+   */
+  public String ufmt(URL u) {
+    String user = null;
+    String pass = null;
+    if (u.getUser() != null) {
+      user = u.getUser().username();
+      if (u.getUser().isPasswordSet()) {
+        pass = u.getUser().password();
+      }
     }
-
+    return String.format("opaque=%s, scheme=%s, user=%s, pass=%s, host=%s, path=%s, rawpath=%s, rawq=%s, frag=%s, rawfrag=%s, forcequery=%b, omithost=%b",
+                         u.getOpaque(), u.getScheme(), user, pass, u.getHost(), u.getPath(), u.getRawPath(), u.getRawQuery(), u.getFragment(), u.getRawFragment(), u.isForceQuery(), u.isOmitHost());
   }
 
-  private static final List<URLTest> urlTests = List.of(
-      // no path
-      new URLTest("https://www.google.com", URL.builder().scheme("https").host("www.google.com").build(), ""),
+  @Test
+  public void testParse() {
+    for (URLTest tt : Cases.urlTests) {
+      URL u = URLs.Parse(tt.in());
+      assertEquals(String.format("Parse(%s)\n\tgot:  %s\n\twant: %s\n", tt.in(), ufmt(u), ufmt(tt.out())), tt.out(), u);
+    }
+  }
 
-      // path
-      new URLTest("https://www.google.com/", URL.builder().scheme("https").host("www.google.com").path("/").build(), ""),
+  @Test
+  public void testParseRequestURI() {
+    for (ParseRequestURLTest test : Cases.parseRequestURLTests) {
+      try {
+        URLs.ParseRequestURI(test.url);
+        if (!test.expectedValid) {
+          fail(String.format("ParseRequestURI(%s) gave no err; want some error", test.url));
+        }
+      } catch (Exception e) {
+        if (test.expectedValid) {
+          fail(String.format("ParseRequestURI(%s) gave err %s; want no error", test.url, e.getMessage()));
+        }
+      }
+    }
 
-      // path with hex escaping
-      new URLTest("https://www.google.com/file%20one%26two", URL.builder().scheme("https").host("www.google.com").path("/file one&two").rawPath("/file%20one%26two").build(), ""),
+    URL u = URL.empty;
+    try {
+      u = URLs.ParseRequestURI(Cases.pathThatLooksSchemeRelative);
+    } catch (Exception e) {
+      fail(String.format("Unexpected error %s", e.getMessage()));
+    }
+    if (!Strings.equals(u.getPath(), Cases.pathThatLooksSchemeRelative)) {
+      fail(String.format("ParseRequestURI path:\n\tgot  %s\n\twant %s\n", u.getPath(), Cases.pathThatLooksSchemeRelative));
+    }
+  }
 
-      // fragment with hex escaping
-      new URLTest("https://www.google.com/#file%20one%26two", URL.builder().scheme("https").host("www.google.com").path("/").fragment("file one&two").rawFragment("file%20one%26two").build(), ""),
+  @Test
+  public void testURLString() {
+    for (URLTest tt : Cases.urlTests) {
+      URL u = URLs.Parse(tt.in());
+      String expected = tt.in();
+      if (Strings.isNotEmpty(tt.roundtrip())) {
+        expected = tt.roundtrip();
+      }
+      String s = u.toString();
+      if (!Strings.equals(s, expected)) {
+        fail(String.format("Parse(%s).toString() == %s (expected %s)", tt.in(), s, expected));
+      }
+    }
 
-      // user
-      new URLTest("ftp://webmaster@www.google.com/", URL.builder().scheme("ftp").user(new Userinfo("webmaster")).host("www.google.com").path("/").build(), ""),
+    for (StringURLTest tt : Cases.stringURLTests) {
+      String got = tt.url.toString();
+      if (!Strings.equals(got, tt.want)) {
+        fail(String.format("%s -> %s; want %s", ufmt(tt.url), got, tt.want));
+      }
+    }
+  }
 
-      // escape sequence in username
-      new URLTest("ftp://john%20doe@www.google.com/", URL.builder().scheme("ftp").user(new Userinfo("john doe")).host("www.google.com").path("/").build(), "ftp://john%20doe@www.google.com/"),
-
-      // escape query
-      new URLTest("https://www.google.com/?", URL.builder().scheme("https").host("www.google.com").path("/").forceQuery(true).build(), ""),
-
-      // query ending in question mark
-      new URLTest("https://www.google.com/?foo=bar?", URL.builder().scheme("https").host("www.google.com").path("/").rawQuery("foo=bar").build(), ""),
-
-      // query
-      new URLTest("https://www.google.com/?q=go+language", URL.builder().scheme("https").host("www.google.com").path("/").rawQuery("q=go+language").build(), ""),
-
-      // query with hex escaping: NOT parsed
-      new URLTest("https://www.google.com/?q=go%20language", URL.builder().scheme("https").host("www.google.com").path("/").rawQuery("q=go%20language").build(), ""),
-
-      // %20 outside query
-      new URLTest("https://www.google.com/a%20b?q=c+d", URL.builder().scheme("https").host("www.google.com").path("/a b").rawQuery("q=c+d").build(), ""),
-
-      // path without leading /, so no parsing
-      new URLTest("http:www.google.com/?q=go+language", URL.builder().scheme("http").opaque("www.google.com/").rawQuery("q=go+language").build(), "http:www.google.com/?q=go+language"),
-
-      // path without leading /, so no parsing
-      new URLTest("http:%2f%2fwww.google.com/?q=go+language",
-                  URL.builder().scheme("http").opaque("%2f%2fwww.google.com/").rawQuery("q=go+language").build(),
-                  "http:%2f%2fwww.google.com/?q=go+language"),
-
-      // non-authority with path; see golang.org/issue/46059
-      new URLTest("mailto:/webmaster@golang.org", URL.builder().scheme("mailto").path("/webmaster@golang.org").omitHost(true).build(), ""),
-
-      // non-authority
-      new URLTest("mailto:webmaster@golang.org", URL.builder().scheme("mailto").opaque("webmaster@golang.org").build(), ""),
-
-      // unescaped :// in query should not create a scheme
-      new URLTest("/foo?query=http://bad", URL.builder().path("/foo").rawQuery("query=http://bad").build(), ""),
-
-      // leading // without scheme should create an authority
-      new URLTest("//foo", URL.builder().host("foo").build(), ""),
-
-      // leading // without scheme, with userinfo, path, and query
-      new URLTest("//user@foo/path?a=b", URL.builder().user(new Userinfo("user")).host("foo").path("/path").rawQuery("a=b").build(), ""),
-
-      // Three leading slashes isn't an authority, but doesn't return an error.
-      new URLTest("///threeslashes", URL.builder().path("///threeslashes").build(), ""),
-
-      new URLTest("https://user:password@google.com", URL.builder().scheme("https").user(new Userinfo("user", "password")).host("google.com").build(), "https://user:password@google.com"),
-
-      // unescaped @ in username should not confuse host
-      new URLTest("https://j@ne:password@google.com", URL.builder().scheme("https").user(new Userinfo("j@ne", "password")).host("google.com").build(), "https://j%40ne:password@google.com"),
-
-      // unescaped @ in password should not confuse host
-      new URLTest("https://jane:p@ssword@google.com", URL.builder().scheme("https").user(new Userinfo("jane", "p@ssword")).host("google.com").build(), "https://jane:p%40ssword@google.com"),
-      new URLTest("https://j@ne:password@google.com/p@th?q=@go",
-                  URL.builder().scheme("https").user(new Userinfo("j@ne", "password")).host("google.com").path("/p@th").rawQuery("q=@go").build(),
-                  "https://j%40ne:password@google.com/p@th?q=@go")
-  );
+  @Test
+  public void debugging() {
+    String in = "http://hello.世界.com/foo";
+    URL u = URLs.Parse(in);
+    var s = System.currentTimeMillis();
+    System.out.println(u.toString());
+    System.out.printf("spent %sms%n", System.currentTimeMillis() - s);
+  }
 
 }
