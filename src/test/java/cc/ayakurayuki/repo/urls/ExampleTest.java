@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import cc.ayakurayuki.repo.urls.wrapper.Result;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import java.util.LinkedList;
@@ -30,7 +31,7 @@ public class ExampleTest {
   @Test
   public void examplePathUnescape() {
     String escapedPath = "my%2Fcool+blog&about%2Cstuff";
-    String path = URLs.PathUnescape(escapedPath);
+    String path = URLs.PathUnescape(escapedPath).ok();
     assertEquals("my/cool+blog&about,stuff", path);
   }
 
@@ -43,7 +44,7 @@ public class ExampleTest {
   @Test
   public void exampleQueryUnescape() {
     String escapedQuery = "my%2Fcool%2Bblog%26about%2Cstuff";
-    String query = URLs.QueryUnescape(escapedQuery);
+    String query = URLs.QueryUnescape(escapedQuery).ok();
     assertEquals("my/cool+blog&about,stuff", query);
   }
 
@@ -166,7 +167,8 @@ public class ExampleTest {
 
   @Test
   public void exampleParseQuery() {
-    Values m = URLs.ParseQuery("x=1&y=2&y=3");
+    Result<Values, Exception> parseResult = URLs.ParseQuery("x=1&y=2&y=3");
+    Values m = parseResult.ok();
 
     Gson gson = new GsonBuilder().disableHtmlEscaping().create();
     String json = gson.toJson(m);

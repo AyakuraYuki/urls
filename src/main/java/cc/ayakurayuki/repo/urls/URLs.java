@@ -143,7 +143,7 @@ public abstract class URLs {
    * <p>
    * It throws an error if any % is not followed by two hexadecimal digits.
    */
-  public static String QueryUnescape(String s) {
+  public static Result<String, Exception> QueryUnescape(String s) {
     return unescape(s, Encoding.QueryComponent);
   }
 
@@ -155,7 +155,7 @@ public abstract class URLs {
    * PathUnescape is identical to {@link #QueryUnescape(String)} except that it does
    * not unescape '+' to ' ' (space).
    */
-  public static String PathUnescape(String s) {
+  public static Result<String, Exception> PathUnescape(String s) {
     return unescape(s, Encoding.PathSegment);
   }
 
@@ -163,7 +163,7 @@ public abstract class URLs {
    * unescape unescapes a string;
    * the mode specifies which section of URL string is being unescaped.
    */
-  protected static String unescape(String s, Encoding mode) {
+  protected static Result<String, Exception> unescape(String s, Encoding mode) {
     // count %, check that they're well-formed
     int n = 0;
     boolean hasPlus = false;
@@ -179,7 +179,7 @@ public abstract class URLs {
             if (s.length() > 3) {
               s = s.substring(0, 3);
             }
-            throw new EscapeException(s);
+            return new Result<>("", new EscapeException(s));
           }
           // Per https://tools.ietf.org/html/rfc3986#page-21
           // in the host component %-encoding can only be used
@@ -188,7 +188,7 @@ public abstract class URLs {
           // introduces %25 being allowed to escape a percent sign
           // in IPv6 scoped-address literals. Yay.
           if (mode == Encoding.Host && unhex(s.charAt(i + 1)) < 8 && !Strings.startsWith(s, "%25", i)) {
-            throw new EscapeException(s.substring(i, i + 3));
+            return new Result<>("", new EscapeException(s.substring(i, i + 3)));
           }
           if (mode == Encoding.Zone) {
             // RFC 6874 says basically "anything goes" for zone identifiers
@@ -200,7 +200,7 @@ public abstract class URLs {
             // But Windows puts spaces here! Yay.
             int v = unhex(s.charAt(i + 1)) << 4 | unhex(s.charAt(i + 2));
             if (!Strings.startsWith(s, "%25", i) && v != ' ' && shouldEscape((char) v, Encoding.Host)) {
-              throw new InvalidHostException(s.substring(i, i + 3));
+              return new Result<>("", new InvalidHostException(s.substring(i, i + 3)));
             }
           }
           i += 3;
@@ -213,7 +213,7 @@ public abstract class URLs {
 
         default:
           if ((mode == Encoding.Host || mode == Encoding.Zone) && c < 0x80 && shouldEscape(c, mode)) {
-            throw new InvalidHostException(s.substring(i, i + 1));
+            return new Result<>("", new InvalidHostException(s.substring(i, i + 1)));
           }
           i++;
           break;
@@ -221,7 +221,7 @@ public abstract class URLs {
     }
 
     if (n == 0 && !hasPlus) {
-      return s;
+      return new Result<>(s, null);
     }
 
     try (ByteArrayOutputStream buf = new ByteArrayOutputStream()) {
@@ -245,10 +245,10 @@ public abstract class URLs {
             break;
         }
       }
-      return buf.toString(StandardCharsets.UTF_8);
+      return new Result<>(buf.toString(StandardCharsets.UTF_8), null);
 
     } catch (IOException e) {
-      return s;
+      return new Result<>(s, e);
     }
   }
 
@@ -501,40 +501,52 @@ public abstract class URLs {
     } else {
       parseHostResult = parseHost(authority.substring(i + 1));
     }
+
     if (parseHostResult.isErr()) {
       return new PairEx<>(null, "", parseHostResult.err());
     }
+
     host = parseHostResult.ok();
     if (i < 0) {
       return new PairEx<>(null, host, null);
     }
+
     String userinfo = authority.substring(0, i);
     if (!validUserinfo(userinfo)) {
       return new PairEx<>(null, "", new IllegalArgumentException("invalid userinfo"));
     }
+
     if (!Strings.contains(userinfo, ":")) {
-      try {
-        userinfo = unescape(userinfo, Encoding.UserPassword);
-      } catch (Exception e) {
-        return new PairEx<>(null, "", e);
+
+      Result<String, Exception> unescapeResult = unescape(userinfo, Encoding.UserPassword);
+      if (unescapeResult.isErr()) {
+        return new PairEx<>(null, "", unescapeResult.err());
       }
+      userinfo = unescapeResult.ok();
       user = new Userinfo(userinfo);
+
     } else {
+
       CutResult cutResult = Strings.cut(userinfo, ":");
       String username = MoreObjects.firstNonNull(cutResult.getBefore(), "");
       String password = cutResult.getAfter();
-      try {
-        username = unescape(username, Encoding.UserPassword);
-      } catch (Exception e) {
-        return new PairEx<>(null, "", e);
+
+      Result<String, Exception> unescapeResult = unescape(username, Encoding.UserPassword);
+      if (unescapeResult.isErr()) {
+        return new PairEx<>(null, "", unescapeResult.err());
       }
-      try {
-        password = unescape(password, Encoding.UserPassword);
-      } catch (Exception e) {
-        return new PairEx<>(null, "", e);
+      username = unescapeResult.ok();
+
+      unescapeResult = unescape(password, Encoding.UserPassword);
+      if (unescapeResult.isErr()) {
+        return new PairEx<>(null, "", unescapeResult.err());
       }
+      password = unescapeResult.ok();
+
       user = new Userinfo(username, password);
+
     }
+
     return new PairEx<>(user, host, null);
   }
 
@@ -564,9 +576,24 @@ public abstract class URLs {
       // like newlines.
       int zone = Strings.indexOf(host.substring(0, bound), "%25");
       if (zone >= 0) {
-        String host1 = unescape(host.substring(0, zone), Encoding.Host);
-        String host2 = unescape(host.substring(zone, bound), Encoding.Zone);
-        String host3 = unescape(host.substring(bound), Encoding.Host);
+        Result<String, Exception> unescapeResult = unescape(host.substring(0, zone), Encoding.Host);
+        if (unescapeResult.isErr()) {
+          return Result.err("", unescapeResult.err());
+        }
+        String host1 = unescapeResult.ok();
+
+        unescapeResult = unescape(host.substring(zone, bound), Encoding.Zone);
+        if (unescapeResult.isErr()) {
+          return Result.err("", unescapeResult.err());
+        }
+        String host2 = unescapeResult.ok();
+
+        unescapeResult = unescape(host.substring(bound), Encoding.Host);
+        if (unescapeResult.isErr()) {
+          return Result.err("", unescapeResult.err());
+        }
+        String host3 = unescapeResult.ok();
+
         return Result.ok(host1 + host2 + host3);
       }
     } else if ((bound = Strings.lastIndexOf(host, ":")) != -1) {
@@ -576,12 +603,11 @@ public abstract class URLs {
       }
     }
 
-    try {
-      host = unescape(host, Encoding.Host);
-    } catch (Exception e) {
-      return Result.err("", e);
+    Result<String, Exception> unescapeResult = unescape(host, Encoding.Host);
+    if (unescapeResult.isErr()) {
+      return Result.err("", unescapeResult.err());
     }
-    return Result.ok(host);
+    return Result.ok(unescapeResult.ok());
   }
 
   /**
@@ -662,20 +688,24 @@ public abstract class URLs {
    * A setting without an equals sign is interpreted as a key set to an empty
    * value.
    * Settings containing a non-URL-encoded semicolon are considered invalid.
+   *
+   * @return parse result of query values and an probably-exist exception
    */
-  public static Values ParseQuery(String query) {
+  public static Result<Values, Exception> ParseQuery(String query) {
     Values m = new Values();
-    parseQueryInternal(m, query);
-    return m;
+    Exception e = parseQueryInternal(m, query);
+    return new Result<>(m, e);
   }
 
-  private static void parseQueryInternal(Values m, String query) {
+  private static Exception parseQueryInternal(Values m, String query) {
+    Exception e = null;
     while (Strings.isNotEmpty(query)) {
       CutResult cutResult = Strings.cut(query, "&");
       String key = cutResult.getBefore();
       query = cutResult.getAfter();
       if (Strings.contains(key, ";")) {
-        throw new UrlException("ParseQuery", query, "invalid semicolon separator in query");
+        e = new UrlException("ParseQuery", "invalid semicolon separator in query");
+        continue;
       }
       if (Strings.isEmpty(key)) {
         continue;
@@ -683,10 +713,28 @@ public abstract class URLs {
       cutResult = Strings.cut(key, "=");
       key = cutResult.getBefore();
       String value = cutResult.getAfter();
-      key = QueryUnescape(key);
-      value = QueryUnescape(value);
+
+      Result<String, Exception> keyUnescapeResult = QueryUnescape(key);
+      if (keyUnescapeResult.isErr()) {
+        if (e == null) {
+          e = keyUnescapeResult.err();
+        }
+        continue;
+      }
+      key = keyUnescapeResult.ok();
+
+      Result<String, Exception> valueUnescapeResult = QueryUnescape(value);
+      if (valueUnescapeResult.isErr()) {
+        if (e == null) {
+          e = valueUnescapeResult.err();
+        }
+        continue;
+      }
+      value = valueUnescapeResult.ok();
+
       m.add(key, value);
     }
+    return e;
   }
 
   /**

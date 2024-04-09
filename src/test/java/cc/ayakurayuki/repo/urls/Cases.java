@@ -1,6 +1,9 @@
 package cc.ayakurayuki.repo.urls;
 
+import cc.ayakurayuki.repo.urls.exception.EscapeException;
+import java.util.LinkedList;
 import java.util.List;
+import lombok.AllArgsConstructor;
 
 /**
  * @author Ayakura Yuki
@@ -343,15 +346,11 @@ public final class Cases {
   // ==================================================================================================== //
   // ==================================================================================================== //
 
+  @AllArgsConstructor
   public static class ParseRequestURLTest {
 
     public final String  url;
     public final boolean expectedValid;
-
-    public ParseRequestURLTest(String url, boolean expectedValid) {
-      this.url = url;
-      this.expectedValid = expectedValid;
-    }
 
   }
 
@@ -402,15 +401,11 @@ public final class Cases {
   // ==================================================================================================== //
   // ==================================================================================================== //
 
+  @AllArgsConstructor
   public static class StringURLTest {
 
     public final URL    url;
     public final String want;
-
-    public StringURLTest(URL url, String want) {
-      this.url = url;
-      this.want = want;
-    }
 
   }
 
@@ -429,6 +424,446 @@ public final class Cases {
 
         // Non-relative path with first element containing ":" should not be prepended with "./"
         new StringURLTest(URL.builder().scheme("https").host("www.google.com").path("this:that").build(), "https://www.google.com/this:that")
+    );
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class URLRedactedTest {
+
+    public final String name;
+    public final URL    url;
+    public final String want;
+
+  }
+
+  public static final List<URLRedactedTest> urlRedactedTests;
+
+  static {
+    urlRedactedTests = List.of(
+        new URLRedactedTest("non-blank Password",
+                            URL.builder().scheme("http").host("host.tld").path("this:that").user(new Userinfo("user", "password")).build(),
+                            "http://user:xxxxx@host.tld/this:that"),
+        new URLRedactedTest("blank Password",
+                            URL.builder().scheme("http").host("host.tld").path("this:that").user(new Userinfo("user")).build(),
+                            "http://user@host.tld/this:that"),
+        new URLRedactedTest("nil User",
+                            URL.builder().scheme("http").host("host.tld").path("this:that").user(new Userinfo("", "password")).build(),
+                            "http://:xxxxx@host.tld/this:that"),
+        new URLRedactedTest("blank Username, blank Password",
+                            URL.builder().scheme("http").host("host.tld").path("this:that").build(),
+                            "http://host.tld/this:that"),
+        new URLRedactedTest("empty URL", URL.builder().build(), "")
+    );
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class EscapeTest {
+
+    public final String          in;
+    public final String          out;
+    public final EscapeException err;
+
+  }
+
+  public static final List<EscapeTest> unescapeTests;
+
+  static {
+    unescapeTests = List.of(
+        new EscapeTest("", "", null),
+        new EscapeTest("abc", "abc", null),
+        new EscapeTest("1%41", "1A", null),
+        new EscapeTest("1%41%42%43", "1ABC", null),
+        new EscapeTest("%4a", "J", null),
+        new EscapeTest("%6F", "o", null),
+        new EscapeTest("%", "", new EscapeException("%")), // not enough characters after %
+        new EscapeTest("%a", "", new EscapeException("%a")), // not enough characters after %
+        new EscapeTest("%1", "", new EscapeException("%1")), // not enough characters after %
+        new EscapeTest("123%45%6", "", new EscapeException("%6")), // not enough characters after %
+        new EscapeTest("%zzzzz", "", new EscapeException("%zz")), // invalid hex digits
+        new EscapeTest("a+b", "a b", null),
+        new EscapeTest("a%20b", "a b", null)
+    );
+  }
+
+  public static final List<EscapeTest> queryEscapeTests;
+
+  static {
+    queryEscapeTests = List.of(
+        new EscapeTest("", "", null),
+        new EscapeTest("abc", "abc", null),
+        new EscapeTest("one two", "one+two", null),
+        new EscapeTest("10%", "10%25", null),
+        new EscapeTest(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;", "+%3F%26%3D%23%2B%25%21%3C%3E%23%22%7B%7D%7C%5C%5E%5B%5D%60%E2%98%BA%09%3A%2F%40%24%27%28%29%2A%2C%3B", null)
+    );
+  }
+
+  public static final List<EscapeTest> pathEscapeTests;
+
+  static {
+    pathEscapeTests = List.of(
+        new EscapeTest("", "", null),
+        new EscapeTest("abc", "abc", null),
+        new EscapeTest("abc+def", "abc+def", null),
+        new EscapeTest("a/b", "a%2Fb", null),
+        new EscapeTest("one two", "one%20two", null),
+        new EscapeTest("10%", "10%25", null),
+        new EscapeTest(" ?&=#+%!<>#\"{}|\\^[]`☺\t:/@$'()*,;", "%20%3F&=%23+%25%21%3C%3E%23%22%7B%7D%7C%5C%5E%5B%5D%60%E2%98%BA%09:%2F@$%27%28%29%2A%2C%3B", null)
+    );
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class EncodeQueryTest {
+
+    public final Values m;
+    public final String expected;
+
+  }
+
+  public static final List<EncodeQueryTest> encodeQueryTests;
+
+  static {
+    encodeQueryTests = new LinkedList<>();
+    encodeQueryTests.add(new EncodeQueryTest(new Values(), ""));
+
+    Values case2 = new Values();
+    case2.set("q", "puppies");
+    case2.set("oe", "utf8");
+    encodeQueryTests.add(new EncodeQueryTest(case2, "oe=utf8&q=puppies"));
+
+    Values case3 = new Values();
+    case3.add("q", "dogs");
+    case3.add("q", "&");
+    case3.add("q", "7");
+    encodeQueryTests.add(new EncodeQueryTest(case3, "q=dogs&q=%26&q=7"));
+
+    Values case4 = new Values();
+    case4.add("a", "a1");
+    case4.add("a", "a2");
+    case4.add("a", "a3");
+    case4.add("b", "b1");
+    case4.add("b", "b2");
+    case4.add("b", "b3");
+    case4.add("c", "c1");
+    case4.add("c", "c2");
+    case4.add("c", "c3");
+    encodeQueryTests.add(new EncodeQueryTest(case4, "a=a1&a=a2&a=a3&b=b1&b=b2&b=b3&c=c1&c=c2&c=c3"));
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class ResolveTest {
+
+    public final String base;
+    public final String ref;
+    public final String expected;
+
+  }
+
+  public static final List<ResolveTest> resolvePathTests;
+
+  static {
+    resolvePathTests = List.of(
+        new ResolveTest("a/b", ".", "/a/"),
+        new ResolveTest("a/b", "c", "/a/c"),
+        new ResolveTest("a/b", "..", "/"),
+        new ResolveTest("a/", "..", "/"),
+        new ResolveTest("a/", "../..", "/"),
+        new ResolveTest("a/b/c", "..", "/a/"),
+        new ResolveTest("a/b/c", "../d", "/a/d"),
+        new ResolveTest("a/b/c", ".././d", "/a/d"),
+        new ResolveTest("a/b", "./..", "/"),
+        new ResolveTest("a/./b", ".", "/a/"),
+        new ResolveTest("a/../", ".", "/"),
+        new ResolveTest("a/.././b", "c", "/c")
+    );
+  }
+
+  public static final List<ResolveTest> resolveReferenceTests;
+
+  static {
+    resolveReferenceTests = List.of(
+        // Absolute URL references
+        new ResolveTest("http://foo.com?a=b", "https://bar.com/", "https://bar.com/"),
+        new ResolveTest("http://foo.com/", "https://bar.com/?a=b", "https://bar.com/?a=b"),
+        new ResolveTest("http://foo.com/", "https://bar.com/?", "https://bar.com/?"),
+        new ResolveTest("http://foo.com/bar", "mailto:foo@example.com", "mailto:foo@example.com"),
+
+        // Path-absolute references
+        new ResolveTest("http://foo.com/bar", "/baz", "http://foo.com/baz"),
+        new ResolveTest("http://foo.com/bar?a=b#f", "/baz", "http://foo.com/baz"),
+        new ResolveTest("http://foo.com/bar?a=b", "/baz?", "http://foo.com/baz?"),
+        new ResolveTest("http://foo.com/bar?a=b", "/baz?c=d", "http://foo.com/baz?c=d"),
+
+        // Multiple slashes
+        new ResolveTest("http://foo.com/bar", "http://foo.com//baz", "http://foo.com//baz"),
+        new ResolveTest("http://foo.com/bar", "http://foo.com///baz/quux", "http://foo.com///baz/quux"),
+
+        // Scheme-relative
+        new ResolveTest("https://foo.com/bar?a=b", "//bar.com/quux", "https://bar.com/quux"),
+
+        // Path-relative references:
+
+        // ... current directory
+        new ResolveTest("http://foo.com", ".", "http://foo.com/"),
+        new ResolveTest("http://foo.com/bar", ".", "http://foo.com/"),
+        new ResolveTest("http://foo.com/bar/", ".", "http://foo.com/bar/"),
+
+        // ... going down
+        new ResolveTest("http://foo.com", "bar", "http://foo.com/bar"),
+        new ResolveTest("http://foo.com/", "bar", "http://foo.com/bar"),
+        new ResolveTest("http://foo.com/bar/baz", "quux", "http://foo.com/bar/quux"),
+
+        // ... going up
+        new ResolveTest("http://foo.com/bar/baz", "../quux", "http://foo.com/quux"),
+        new ResolveTest("http://foo.com/bar/baz", "../../../../../quux", "http://foo.com/quux"),
+        new ResolveTest("http://foo.com/bar", "..", "http://foo.com/"),
+        new ResolveTest("http://foo.com/bar/baz", "./..", "http://foo.com/"),
+        // ".." in the middle (issue 3560)
+        new ResolveTest("http://foo.com/bar/baz", "quux/dotdot/../tail", "http://foo.com/bar/quux/tail"),
+        new ResolveTest("http://foo.com/bar/baz", "quux/./dotdot/../tail", "http://foo.com/bar/quux/tail"),
+        new ResolveTest("http://foo.com/bar/baz", "quux/./dotdot/.././tail", "http://foo.com/bar/quux/tail"),
+        new ResolveTest("http://foo.com/bar/baz", "quux/./dotdot/./../tail", "http://foo.com/bar/quux/tail"),
+        new ResolveTest("http://foo.com/bar/baz", "quux/./dotdot/dotdot/././../../tail", "http://foo.com/bar/quux/tail"),
+        new ResolveTest("http://foo.com/bar/baz", "quux/./dotdot/dotdot/./.././../tail", "http://foo.com/bar/quux/tail"),
+        new ResolveTest("http://foo.com/bar/baz", "quux/./dotdot/dotdot/dotdot/./../../.././././tail", "http://foo.com/bar/quux/tail"),
+        new ResolveTest("http://foo.com/bar/baz", "quux/./dotdot/../dotdot/../dot/./tail/..", "http://foo.com/bar/quux/dot/"),
+
+        // Remove any dot-segments prior to forming the target URI.
+        // https://datatracker.ietf.org/doc/html/rfc3986#section-5.2.4
+        new ResolveTest("http://foo.com/dot/./dotdot/../foo/bar", "../baz", "http://foo.com/dot/baz"),
+
+        // Triple dot isn't special
+        new ResolveTest("http://foo.com/bar", "...", "http://foo.com/..."),
+
+        // Fragment
+        new ResolveTest("http://foo.com/bar", ".#frag", "http://foo.com/#frag"),
+        new ResolveTest("http://example.org/", "#!$&%27()*+,;=", "http://example.org/#!$&%27()*+,;="),
+
+        // Paths with escaping (issue 16947).
+        new ResolveTest("http://foo.com/foo%2fbar/", "../baz", "http://foo.com/baz"),
+        new ResolveTest("http://foo.com/1/2%2f/3%2f4/5", "../../a/b/c", "http://foo.com/1/a/b/c"),
+        new ResolveTest("http://foo.com/1/2/3", "./a%2f../../b/..%2fc", "http://foo.com/1/2/b/..%2fc"),
+        new ResolveTest("http://foo.com/1/2%2f/3%2f4/5", "./a%2f../b/../c", "http://foo.com/1/2%2f/3%2f4/a%2f../c"),
+        new ResolveTest("http://foo.com/foo%20bar/", "../baz", "http://foo.com/baz"),
+        new ResolveTest("http://foo.com/foo", "../bar%2fbaz", "http://foo.com/bar%2fbaz"),
+        new ResolveTest("http://foo.com/foo%2dbar/", "./baz-quux", "http://foo.com/foo%2dbar/baz-quux"),
+
+        // RFC 3986: Normal Examples
+        // https://datatracker.ietf.org/doc/html/rfc3986#section-5.4.1
+        new ResolveTest("http://a/b/c/d;p?q", "g:h", "g:h"),
+        new ResolveTest("http://a/b/c/d;p?q", "g", "http://a/b/c/g"),
+        new ResolveTest("http://a/b/c/d;p?q", "./g", "http://a/b/c/g"),
+        new ResolveTest("http://a/b/c/d;p?q", "g/", "http://a/b/c/g/"),
+        new ResolveTest("http://a/b/c/d;p?q", "/g", "http://a/g"),
+        new ResolveTest("http://a/b/c/d;p?q", "//g", "http://g"),
+        new ResolveTest("http://a/b/c/d;p?q", "?y", "http://a/b/c/d;p?y"),
+        new ResolveTest("http://a/b/c/d;p?q", "g?y", "http://a/b/c/g?y"),
+        new ResolveTest("http://a/b/c/d;p?q", "#s", "http://a/b/c/d;p?q#s"),
+        new ResolveTest("http://a/b/c/d;p?q", "g#s", "http://a/b/c/g#s"),
+        new ResolveTest("http://a/b/c/d;p?q", "g?y#s", "http://a/b/c/g?y#s"),
+        new ResolveTest("http://a/b/c/d;p?q", ";x", "http://a/b/c/;x"),
+        new ResolveTest("http://a/b/c/d;p?q", "g;x", "http://a/b/c/g;x"),
+        new ResolveTest("http://a/b/c/d;p?q", "g;x?y#s", "http://a/b/c/g;x?y#s"),
+        new ResolveTest("http://a/b/c/d;p?q", "", "http://a/b/c/d;p?q"),
+        new ResolveTest("http://a/b/c/d;p?q", ".", "http://a/b/c/"),
+        new ResolveTest("http://a/b/c/d;p?q", "./", "http://a/b/c/"),
+        new ResolveTest("http://a/b/c/d;p?q", "..", "http://a/b/"),
+        new ResolveTest("http://a/b/c/d;p?q", "../", "http://a/b/"),
+        new ResolveTest("http://a/b/c/d;p?q", "../g", "http://a/b/g"),
+        new ResolveTest("http://a/b/c/d;p?q", "../..", "http://a/"),
+        new ResolveTest("http://a/b/c/d;p?q", "../../", "http://a/"),
+        new ResolveTest("http://a/b/c/d;p?q", "../../g", "http://a/g"),
+
+        // RFC 3986: Abnormal Examples
+        // https://datatracker.ietf.org/doc/html/rfc3986#section-5.4.2
+        new ResolveTest("http://a/b/c/d;p?q", "../../../g", "http://a/g"),
+        new ResolveTest("http://a/b/c/d;p?q", "../../../../g", "http://a/g"),
+        new ResolveTest("http://a/b/c/d;p?q", "/./g", "http://a/g"),
+        new ResolveTest("http://a/b/c/d;p?q", "/../g", "http://a/g"),
+        new ResolveTest("http://a/b/c/d;p?q", "g.", "http://a/b/c/g."),
+        new ResolveTest("http://a/b/c/d;p?q", ".g", "http://a/b/c/.g"),
+        new ResolveTest("http://a/b/c/d;p?q", "g..", "http://a/b/c/g.."),
+        new ResolveTest("http://a/b/c/d;p?q", "..g", "http://a/b/c/..g"),
+        new ResolveTest("http://a/b/c/d;p?q", "./../g", "http://a/b/g"),
+        new ResolveTest("http://a/b/c/d;p?q", "./g/.", "http://a/b/c/g/"),
+        new ResolveTest("http://a/b/c/d;p?q", "g/./h", "http://a/b/c/g/h"),
+        new ResolveTest("http://a/b/c/d;p?q", "g/../h", "http://a/b/c/h"),
+        new ResolveTest("http://a/b/c/d;p?q", "g;x=1/./y", "http://a/b/c/g;x=1/y"),
+        new ResolveTest("http://a/b/c/d;p?q", "g;x=1/../y", "http://a/b/c/y"),
+        new ResolveTest("http://a/b/c/d;p?q", "g?y/./x", "http://a/b/c/g?y/./x"),
+        new ResolveTest("http://a/b/c/d;p?q", "g?y/../x", "http://a/b/c/g?y/../x"),
+        new ResolveTest("http://a/b/c/d;p?q", "g#s/./x", "http://a/b/c/g#s/./x"),
+        new ResolveTest("http://a/b/c/d;p?q", "g#s/../x", "http://a/b/c/g#s/../x"),
+
+        // Extras.
+        new ResolveTest("https://a/b/c/d;p?q", "//g?q", "https://g?q"),
+        new ResolveTest("https://a/b/c/d;p?q", "//g#s", "https://g#s"),
+        new ResolveTest("https://a/b/c/d;p?q", "//g/d/e/f?y#s", "https://g/d/e/f?y#s"),
+        new ResolveTest("https://a/b/c/d;p#s", "?y", "https://a/b/c/d;p?y"),
+        new ResolveTest("https://a/b/c/d;p?q#s", "?y", "https://a/b/c/d;p?y"),
+
+        // Empty path and query but with ForceQuery (issue 46033).
+        new ResolveTest("https://a/b/c/d;p?q#s", "?", "https://a/b/c/d;p?")
+    );
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class ParseTest {
+
+    public final String  query;
+    public final Values  out;
+    public final boolean ok;
+
+  }
+
+  public static final List<ParseTest> parseTests;
+
+  static {
+    parseTests = new LinkedList<>();
+
+    Values v1 = new Values();
+    v1.set("a", "1");
+    parseTests.add(new ParseTest("a=1", v1, true));
+
+    Values v2 = new Values();
+    v2.set("a", "1");
+    v2.set("b", "2");
+    parseTests.add(new ParseTest("a=1&b=2", v2, true));
+
+    Values v3 = new Values();
+    v3.add("a", "1");
+    v3.add("a", "2");
+    v3.add("a", "banana");
+    parseTests.add(new ParseTest("a=1&a=2&a=banana", v3, true));
+
+    Values v4 = new Values();
+    v4.set("ascii", "<key: 0x90>");
+    parseTests.add(new ParseTest("ascii=%3Ckey%3A+0x90%3E", v4, true));
+
+    parseTests.add(new ParseTest("a=1;b=2", new Values(), false));
+    parseTests.add(new ParseTest("a;b=1", new Values(), false));
+
+    Values v5 = new Values();
+    v5.set("a", ";");
+    parseTests.add(new ParseTest("a=%3B", v5, true)); // hex encoding for semicolon
+
+    Values v6 = new Values();
+    v6.set("a;b", "1");
+    parseTests.add(new ParseTest("a%3Bb=1", v6, true));
+
+    Values v7 = new Values();
+    v7.set("a", "1");
+    parseTests.add(new ParseTest("a=1&a=2;a=banana", v7, false));
+
+    Values v8 = new Values();
+    v8.set("c", "1");
+    parseTests.add(new ParseTest("a;b&c=1", v8, false));
+
+    Values v9 = new Values();
+    v9.set("a", "1");
+    v9.set("c", "4");
+    parseTests.add(new ParseTest("a=1&b=2;a=3&c=4", v9, false));
+
+    Values v10 = new Values();
+    v10.set("a", "1");
+    parseTests.add(new ParseTest("a=1&b=2;c=3", v10, false));
+
+    parseTests.add(new ParseTest(";", new Values(), false));
+    parseTests.add(new ParseTest("a=1;", new Values(), false));
+
+    Values v11 = new Values();
+    v11.set("a", "1");
+    parseTests.add(new ParseTest("a=1&;", v11, false));
+
+    Values v12 = new Values();
+    v12.set("b", "2");
+    parseTests.add(new ParseTest(";a=1&b=2", v12, false));
+
+    Values v13 = new Values();
+    v13.set("a", "1");
+    parseTests.add(new ParseTest("a=1&b=2;", v13, false));
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class RequestURITest {
+
+    public final URL    url;
+    public final String out;
+
+  }
+
+  public static final List<RequestURITest> requritests;
+
+  static {
+    requritests = List.of(
+        new RequestURITest(URL.builder().scheme("http").host("example.com").path("").build(), "/"),
+        new RequestURITest(URL.builder().scheme("http").host("example.com").path("/a b").build(), "/a%20b"),
+
+        // golang.org/issue/4860 variant 1
+        new RequestURITest(URL.builder().scheme("http").host("example.com").opaque("/%2F/%2F/").build(), "/%2F/%2F/"),
+
+        // golang.org/issue/4860 variant 2
+        new RequestURITest(URL.builder().scheme("http").host("example.com").opaque("//other.example.com/%2F/%2F/").build(), "http://other.example.com/%2F/%2F/"),
+
+        // better fix for issue 4860
+        new RequestURITest(URL.builder().scheme("http").host("example.com").path("/////").rawPath("/%2F/%2F/").build(), "/%2F/%2F/"),
+        new RequestURITest(
+            URL.builder()
+                .scheme("http")
+                .host("example.com")
+                .path("/////")
+                .rawPath("/WRONG/") // ignored because doesn't match Path
+                .build(),
+            "/////"
+        ),
+        new RequestURITest(URL.builder().scheme("http").host("example.com").path("/a b").rawQuery("q=go+language").build(), "/a%20b?q=go+language"),
+        new RequestURITest(
+            URL.builder()
+                .scheme("http")
+                .host("example.com")
+                .path("/a b")
+                .rawPath("/a b") // ignored because invalid
+                .rawQuery("q=go+language")
+                .build(),
+            "/a%20b?q=go+language"
+        ),
+        new RequestURITest(
+            URL.builder()
+                .scheme("http")
+                .host("example.com")
+                .path("/a?b")
+                .rawPath("/a?b") // ignored because invalid
+                .rawQuery("q=go+language")
+                .build(),
+            "/a%3Fb?q=go+language"
+        ),
+        new RequestURITest(URL.builder().scheme("myschema").opaque("opaque").build(), "opaque"),
+        new RequestURITest(URL.builder().scheme("myschema").opaque("opaque").rawQuery("q=go+language").build(), "opaque?q=go+language"),
+        new RequestURITest(URL.builder().scheme("http").host("example.com").path("//foo").build(), "//foo"),
+        new RequestURITest(URL.builder().scheme("http").host("example.com").path("/foo").forceQuery(true).build(), "/foo?")
     );
   }
 

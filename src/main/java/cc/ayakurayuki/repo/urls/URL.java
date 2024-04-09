@@ -2,6 +2,7 @@ package cc.ayakurayuki.repo.urls;
 
 import cc.ayakurayuki.repo.urls.wrapper.CutResult;
 import cc.ayakurayuki.repo.urls.wrapper.Pair;
+import cc.ayakurayuki.repo.urls.wrapper.Result;
 import com.google.common.base.MoreObjects;
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -92,8 +93,8 @@ public class URL implements Serializable {
    */
   public String escapedPath() {
     if (Strings.isNotEmpty(this.rawPath) && URLs.validEncoded(this.rawPath, Encoding.Path)) {
-      String p = URLs.unescape(this.rawPath, Encoding.Path);
-      if (Strings.equals(p, this.path)) {
+      Result<String, Exception> unescapeResult = URLs.unescape(this.rawPath, Encoding.Path);
+      if (!unescapeResult.isErr() && Strings.equals(unescapeResult.ok(), this.path)) {
         return this.rawPath;
       }
     }
@@ -115,8 +116,8 @@ public class URL implements Serializable {
    */
   public String escapedFragment() {
     if (Strings.isNotEmpty(this.rawFragment) && URLs.validEncoded(this.rawFragment, Encoding.Fragment)) {
-      String f = URLs.unescape(this.rawFragment, Encoding.Fragment);
-      if (Strings.equals(f, this.fragment)) {
+      Result<String, Exception> unescapeResult = URLs.unescape(this.rawFragment, Encoding.Fragment);
+      if (!unescapeResult.isErr() && Strings.equals(unescapeResult.ok(), this.fragment)) {
         return this.rawFragment;
       }
     }
@@ -282,7 +283,7 @@ public class URL implements Serializable {
    * To check errors use [ParseQuery].
    */
   public Values query() {
-    return URLs.ParseQuery(this.rawQuery);
+    return URLs.ParseQuery(this.rawQuery).ok();
   }
 
   /**
@@ -427,9 +428,12 @@ public class URL implements Serializable {
    * escaping.
    */
   public void setPath(String p) {
-    String path = URLs.unescape(p, Encoding.Path);
-    this.path = path;
-    String escp = URLs.escape(path, Encoding.Path);
+    Result<String, Exception> unescapeResult = URLs.unescape(p, Encoding.Path);
+    if (unescapeResult.isErr()) {
+      return;
+    }
+    this.path = unescapeResult.ok();
+    String escp = URLs.escape(unescapeResult.ok(), Encoding.Path);
     if (Strings.equals(p, escp)) {
       this.setRawPath("");
     } else {
@@ -477,9 +481,12 @@ public class URL implements Serializable {
    * setFragment is like setPath but for Fragment/RawFragment.
    */
   public void setFragment(String f) {
-    String frag = URLs.unescape(f, Encoding.Fragment);
-    this.fragment = frag;
-    String escf = URLs.escape(frag, Encoding.Fragment);
+    Result<String, Exception> unescapeResult = URLs.unescape(f, Encoding.Fragment);
+    if (unescapeResult.isErr()) {
+      return;
+    }
+    this.fragment = unescapeResult.ok();
+    String escf = URLs.escape(unescapeResult.ok(), Encoding.Fragment);
     if (Strings.equals(f, escf)) {
       // default encoding is fine
       this.rawFragment = "";
