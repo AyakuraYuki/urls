@@ -9,14 +9,21 @@ import static org.junit.Assert.fail;
 
 import cc.ayakurayuki.repo.urls.Cases.EncodeQueryTest;
 import cc.ayakurayuki.repo.urls.Cases.EscapeTest;
+import cc.ayakurayuki.repo.urls.Cases.JoinPathTest;
+import cc.ayakurayuki.repo.urls.Cases.ParseErrorsTest;
 import cc.ayakurayuki.repo.urls.Cases.ParseRequestURLTest;
 import cc.ayakurayuki.repo.urls.Cases.ParseTest;
 import cc.ayakurayuki.repo.urls.Cases.RequestURITest;
 import cc.ayakurayuki.repo.urls.Cases.ResolveTest;
+import cc.ayakurayuki.repo.urls.Cases.ShouldEscapeTest;
 import cc.ayakurayuki.repo.urls.Cases.StringURLTest;
+import cc.ayakurayuki.repo.urls.Cases.URLHostnameAndPortTest;
 import cc.ayakurayuki.repo.urls.Cases.URLRedactedTest;
 import cc.ayakurayuki.repo.urls.Cases.URLTest;
 import cc.ayakurayuki.repo.urls.wrapper.Result;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import org.junit.Test;
@@ -34,6 +41,9 @@ public class CaseTest {
    * more useful string for debugging than printf struct printer
    */
   public String ufmt(URL u) {
+    if (u == null) {
+      return null;
+    }
     String user = null;
     String pass = null;
     if (u.getUser() != null) {
@@ -49,7 +59,11 @@ public class CaseTest {
   @Test
   public void testParse() {
     for (URLTest tt : Cases.urlTests) {
-      URL u = URLs.Parse(tt.in());
+      Result<URL, Exception> parsed = URLs.Parse(tt.in());
+      if (parsed.isErr()) {
+        fail(String.format("Parse(\"%s\") returned error %s", tt.in(), parsed.err().getMessage()));
+      }
+      URL u = parsed.ok();
       assertEquals(String.format("Parse(%s)\n\tgot:  %s\n\twant: %s\n", tt.in(), ufmt(u), ufmt(tt.out())), tt.out(), u);
     }
   }
@@ -83,7 +97,12 @@ public class CaseTest {
   @Test
   public void testURLString() {
     for (URLTest tt : Cases.urlTests) {
-      URL u = URLs.Parse(tt.in());
+      Result<URL, Exception> parsed = URLs.Parse(tt.in());
+      if (parsed.isErr()) {
+        fail(String.format("Parse(\"%s\") returned error %s", tt.in(, parsed.err().getMessage())));
+        continue;
+      }
+      URL u = parsed.ok();
       String expected = tt.in();
       if (Strings.isNotEmpty(tt.roundtrip())) {
         expected = tt.roundtrip();
@@ -200,12 +219,12 @@ public class CaseTest {
   }
 
   private URL mustParse(String invokeFrom, String url) {
-    try {
-      return URLs.Parse(url);
-    } catch (Exception e) {
-      fail(String.format("Unexpected error when parsing url %s from method %s, error: %s", url, invokeFrom, e.getMessage()));
-      return URL.empty; // unreachable line but necessary for completing function declaration
+    Result<URL, Exception> parsed = URLs.Parse(url);
+    if (parsed.isErr()) {
+      fail(String.format("[invoke from %s] Parse(\"%s\") got error %s", invokeFrom, url, parsed.err().getMessage()));
+      return null;
     }
+    return parsed.ok();
   }
 
   @Test
@@ -249,7 +268,7 @@ public class CaseTest {
   @Test
   public void testQueryValues() {
     String url = "https://x.com?foo=bar&bar=1&bar=2&baz";
-    URL u = URLs.Parse(url);
+    URL u = URLs.Parse(url).ok();
     Values v = u.query();
     assertNotNull(String.format("URLs.Parse(%s) missing query values", url), v);
     assertEquals(String.format("got %d keys in Query values, want 3", v.size()), 3, v.size());
@@ -314,6 +333,136 @@ public class CaseTest {
     Exception err = result.err();
     if (!Strings.contains(err.getMessage(), "%gh")) {
       fail(String.format("ParseQuery(%s) returned error %s, want something containing %s", url, err.getMessage(), "%gh"));
+    }
+  }
+
+  @Test
+  public void testParseErrors() {
+    for (ParseErrorsTest tt : Cases.parseErrorsTests) {
+      Result<URL, Exception> parsed = URLs.Parse(tt.in);
+      if (tt.wantErr) {
+        if (!parsed.isErr()) {
+          fail(String.format("Parse(\"%s\") = %s; want an error", tt.in, ufmt(parsed.ok())));
+        }
+        continue;
+      }
+      if (parsed.isErr()) {
+        fail(String.format("Parse(%s) = %s, want no error", tt.in, parsed.err().getMessage()));
+      }
+    }
+  }
+
+  // issue 11202
+  @Test
+  public void testStarRequest() {
+    Result<URL, Exception> parsed = URLs.Parse("*");
+    if (parsed.isErr()) {
+      fail(String.format("unexpected exception: %s", parsed.err().getMessage()));
+    }
+    URL u = parsed.ok();
+    String got = u.requestURI();
+    assertEquals("*", got);
+  }
+
+  @Test
+  public void testShouldEscape() {
+    for (ShouldEscapeTest tt : Cases.shouldEscapeTests) {
+      boolean got = URLs.shouldEscape(tt.in, tt.mode);
+      assertEquals(String.format("shouldEscape(%s, %s) returned %b; expected %b", tt.in, tt.mode, got, tt.escape), tt.escape, got);
+    }
+  }
+
+  @Test
+  public void testURLHostnameAndPort() {
+    for (URLHostnameAndPortTest tt : Cases.urlHostnameAndPortTests) {
+      URL u = URL.builder().host(tt.in).build();
+      String host = u.hostname();
+      String port = u.port();
+      assertEquals(String.format("hostname for host %s = %s; want %s", tt.in, host, tt.host), tt.host, host);
+      assertEquals(String.format("port for host %s = %s; want %s", tt.in, host, tt.host), tt.port, port);
+    }
+  }
+
+  @Test
+  public void testJSON() {
+    Result<URL, Exception> parsed = URLs.Parse("https://www.google.com/x?y=z");
+    if (parsed.isErr()) {
+      fail(String.format("unexpected exception: %s", parsed.err().getMessage()));
+    }
+    URL u = parsed.ok();
+    Gson gson = new GsonBuilder()
+        .disableHtmlEscaping()
+        .create();
+    String json = gson.toJson(u);
+    URL u1 = gson.fromJson(json, URL.class);
+    assertEquals(u, u1);
+    assertEquals(u.toString(), u1.toString());
+  }
+
+  @Test
+  public void testNullUser() {
+    Result<URL, Exception> parsed = URLs.Parse("http://foo.com/");
+    if (parsed.isErr()) {
+      fail(String.format("unexpected exception: %s", parsed.err().getMessage()));
+    }
+    URL u = parsed.ok();
+    assertEquals("", u.username());
+    assertEquals("", u.password());
+    assertFalse(u.isPasswordSet());
+    assertEquals("", u.userToString());
+  }
+
+  @Test
+  public void testInvalidUserPassword() {
+    try {
+      URLs.Parse("http://user^:passwo^rd@foo.com/");
+    } catch (Exception e) {
+      if (!Strings.contains(e.getMessage(), "invalid userinfo")) {
+        fail(String.format("unexpected exception: %s (expected substring \"invalid userinfo\")", e.getMessage()));
+      }
+    }
+  }
+
+  @Test
+  public void testRejectControlCharacters() {
+    List<String> tests = List.of(
+        "http://foo.com/?foo\nbar",
+        "http\r://foo.com/",
+        "http://foo\u007f.com/"
+    );
+    final String wantSub = "invalid control characters in url";
+    for (String s : tests) {
+      try {
+        URLs.Parse(s);
+      } catch (Exception e) {
+        if (!Strings.contains(e.getMessage(), wantSub)) {
+          fail(String.format("unexpected exception: %s (expected substring \"invalid control characters in url\")", e.getMessage()));
+        }
+      }
+    }
+
+    // But don't reject non-ASCII CTLs, at least for now:
+    try {
+      URLs.Parse("http://foo.com/ctl\u0080");
+    } catch (Exception e) {
+      fail(String.format("error parsing URL with non-ASCII control byte: %s", e.getMessage()));
+    }
+  }
+
+  @Test
+  public void testJoinPath() {
+    for (JoinPathTest tt : Cases.joinPathTests) {
+      String wantErr = "null";
+      if (Strings.isEmpty(tt.out)) {
+        wantErr = "non-null error";
+      }
+
+      Result<String, Exception> joinPathResult = URLs.JoinPath(tt.base, tt.elem);
+      String out = joinPathResult.ok();
+      Exception err = joinPathResult.err();
+      if (!Strings.equals(out, tt.out) || ((err == null) != (Strings.isNotEmpty(tt.out)))) {
+        fail(String.format("JoinPath(\"%s\", \"%s\") = \"%s\", %s; want \"%s\", %s", tt.base, Arrays.toString(tt.elem), out, err, tt.out, wantErr));
+      }
     }
   }
 

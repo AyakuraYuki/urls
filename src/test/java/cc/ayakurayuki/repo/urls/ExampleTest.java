@@ -203,6 +203,39 @@ public class ExampleTest {
   }
 
   @Test
+  public void exampleURL_username() {
+    // you can get the actual username by calling URL.username(),
+    // or get empty value if URL.user is <null>
+
+    URL u = URLs.Parse("https://example.org:8000/path");
+    assertEquals("", u.username());
+    u = URLs.Parse("https://user@example.org/path");
+    assertEquals("user", u.username());
+  }
+
+  @Test
+  public void exampleURL_password() {
+    // you can get the actual password by calling URL.password(),
+    // or get empty value if URL.user is <null>
+
+    URL u = URLs.Parse("https://example.org:8000/path");
+    assertEquals("", u.password());
+    u = URLs.Parse("https://user:abc@example.org/path");
+    assertEquals("abc", u.password());
+  }
+
+  @Test
+  public void exampleURL_isPasswordSet() {
+    // you can get the actual password-set flag by calling URL.isPasswordSet(),
+    // or get false if URL.user is <null>
+
+    URL u = URLs.Parse("https://example.org:8000/path");
+    assertFalse(u.isPasswordSet());
+    u = URLs.Parse("https://user:boys@example.org/path");
+    assertTrue(u.isPasswordSet());
+  }
+
+  @Test
   public void exampleURL_isAbs() {
     URL u = new URL();
     u.setHost("example.com");

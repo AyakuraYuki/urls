@@ -27,7 +27,7 @@ public abstract class URLs {
     return (byte) Character.digit(c, 16);
   }
 
-  private static boolean shouldEscape(char c, Encoding mode) {
+  protected static boolean shouldEscape(char c, Encoding mode) {
     // unreserved characters (alphanum)
     if (('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')) {
       return false;
@@ -352,25 +352,25 @@ public abstract class URLs {
    * without a scheme is invalid but may not necessarily return an
    * error, due to parsing ambiguities.
    */
-  public static URL Parse(String rawURL) {
+  public static Result<URL, Exception> Parse(String rawURL) {
     // cut off #frag
     CutResult cutResult = Strings.cut(rawURL, "#");
     String u = cutResult.getBefore();
     String frag = cutResult.getAfter();
     Result<URL, Throwable> result = parse(u, false);
     if (result.isErr()) {
-      throw new UrlException("parse", rawURL, result.err());
+      return Result.err(new UrlException("parse", rawURL, result.err()));
     }
     URL url = result.ok();
     if (Strings.isEmpty(frag)) {
-      return url;
+      return Result.ok(url);
     }
     try {
       url.setFragment(frag);
     } catch (Exception e) {
-      throw new UrlException("parse", rawURL, e);
+      return Result.err(new UrlException("parse", rawURL, e));
     }
-    return url;
+    return Result.ok(url);
   }
 
   /**
@@ -883,9 +883,14 @@ public abstract class URLs {
    * JoinPath returns a [URL] string with the provided path elements joined to
    * the existing path of base and the resulting path cleaned of any ./ or ../ elements.
    */
-  public static String JoinPath(String base, String... elem) {
-    URL url = Parse(base);
-    return url.joinPath(elem).toString();
+  public static Result<String, Exception> JoinPath(String base, String... elem) {
+    Result<URL, Exception> parseResult = Parse(base);
+    if (parseResult.isErr()) {
+      return Result.ok("");
+    }
+    URL url = parseResult.ok();
+    String u = url.joinPath(elem).toString();
+    return Result.ok(u);
   }
 
 }

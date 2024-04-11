@@ -233,7 +233,7 @@ public class URL implements Serializable {
    * failure, otherwise its return value is the same as [URL.ResolveReference].
    */
   public URL parse(String ref) {
-    URL refURL = URLs.Parse(ref);
+    URL refURL = URLs.Parse(ref).ok();
     return this.resolveReference(refURL);
   }
 
@@ -327,6 +327,34 @@ public class URL implements Serializable {
   public String port() {
     Pair<String, String> result = URLs.splitHostPort(this.getHost());
     return MoreObjects.firstNonNull(result.getB(), "");
+  }
+
+  public String username() {
+    if (this.user == null) {
+      return "";
+    }
+    return this.user.username();
+  }
+
+  public String password() {
+    if (this.user == null) {
+      return "";
+    }
+    return this.user.password();
+  }
+
+  public boolean isPasswordSet() {
+    if (this.user == null) {
+      return false;
+    }
+    return this.user.isPasswordSet();
+  }
+
+  public String userToString() {
+    if (this.user == null) {
+      return "";
+    }
+    return this.user.toString();
   }
 
   /**

@@ -1,7 +1,9 @@
 package cc.ayakurayuki.repo.urls;
 
+import cc.ayakurayuki.repo.urls.Cases.EscapeBenchmarkCase;
 import cc.ayakurayuki.repo.urls.Cases.ParseRequestURLTest;
 import cc.ayakurayuki.repo.urls.Cases.URLTest;
+import cc.ayakurayuki.repo.urls.wrapper.Result;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -19,7 +21,6 @@ import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
-import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -30,7 +31,7 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
  * @date 2024/04/08-15:41
  */
 @BenchmarkMode({Mode.AverageTime, Mode.Throughput})
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Thread)
 @Warmup(iterations = 5, time = 2)
 @Measurement(iterations = 5, time = 5)
@@ -41,8 +42,6 @@ public class CaseBenchmark {
   public static void main(String[] args) throws RunnerException {
     Options opt = new OptionsBuilder()
         .include(CaseBenchmark.class.getSimpleName())
-        .result("CaseBenchmark-report.json")
-        .resultFormat(ResultFormatType.JSON)
         .build();
     new Runner(opt).run();
   }
@@ -53,7 +52,7 @@ public class CaseBenchmark {
   public void init() {
     inputs = new ArrayList<>();
     for (URLTest tt : Cases.urlTests) {
-      URL u = URLs.Parse(tt.in());
+      URL u = URLs.Parse(tt.in()).ok();
       if (Strings.isEmpty(tt.roundtrip())) {
         continue;
       }
@@ -94,6 +93,54 @@ public class CaseBenchmark {
   @Benchmark
   public void BenchmarkResolvePath(Blackhole blackhole) {
     blackhole.consume(URLs.resolvePath("a/b/c", ".././d"));
+  }
+
+  private long BenchmarkQueryEscape_exceptionCounter = 0;
+
+  @Benchmark
+  public void BenchmarkQueryEscape(Blackhole blackhole) {
+    for (EscapeBenchmarkCase tc : Cases.escapeBenchmarkCases) {
+      String g = URLs.QueryEscape(tc.unescaped);
+      if (!Strings.equals(g, tc.query)) {
+        blackhole.consume(BenchmarkQueryEscape_exceptionCounter++);
+      }
+    }
+  }
+
+  private long BenchmarkPathEscape_exceptionCounter = 0;
+
+  @Benchmark
+  public void BenchmarkPathEscape(Blackhole blackhole) {
+    for (EscapeBenchmarkCase tc : Cases.escapeBenchmarkCases) {
+      String g = URLs.PathEscape(tc.unescaped);
+      if (!Strings.equals(g, tc.path)) {
+        blackhole.consume(BenchmarkPathEscape_exceptionCounter++);
+      }
+    }
+  }
+
+  private long BenchmarkQueryUnescape_exceptionCounter = 0;
+
+  @Benchmark
+  public void BenchmarkQueryUnescape(Blackhole blackhole) {
+    for (EscapeBenchmarkCase tc : Cases.escapeBenchmarkCases) {
+      Result<String, Exception> g = URLs.QueryUnescape(tc.unescaped);
+      if (!Strings.equals(g.ok(), tc.query)) {
+        blackhole.consume(BenchmarkQueryUnescape_exceptionCounter++);
+      }
+    }
+  }
+
+  private long BenchmarkPathUnescape_exceptionCounter = 0;
+
+  @Benchmark
+  public void BenchmarkPathUnescape(Blackhole blackhole) {
+    for (EscapeBenchmarkCase tc : Cases.escapeBenchmarkCases) {
+      Result<String, Exception> g = URLs.PathUnescape(tc.unescaped);
+      if (!Strings.equals(g.ok(), tc.path)) {
+        blackhole.consume(BenchmarkPathUnescape_exceptionCounter++);
+      }
+    }
   }
 
 }

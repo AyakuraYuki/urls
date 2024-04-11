@@ -867,4 +867,248 @@ public final class Cases {
     );
   }
 
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class ParseErrorsTest {
+
+    public final String  in;
+    public final boolean wantErr;
+
+  }
+
+  public static final List<ParseErrorsTest> parseErrorsTests;
+
+  static {
+    parseErrorsTests = List.of(
+        new ParseErrorsTest("http://[::1]", false),
+        new ParseErrorsTest("http://[::1]:80", false),
+        new ParseErrorsTest("http://[::1]:namedport", true), // rfc3986 3.2.3
+        new ParseErrorsTest("http://x:namedport", true),     // rfc3986 3.2.3
+        new ParseErrorsTest("http://[::1]/", false),
+        new ParseErrorsTest("http://[::1]a", true),
+        new ParseErrorsTest("http://[::1]%23", true),
+        new ParseErrorsTest("http://[::1%25en0]", false),    // valid zone id
+        new ParseErrorsTest("http://[::1]:", false),         // colon, but no port OK
+        new ParseErrorsTest("http://x:", false),             // colon, but no port OK
+        new ParseErrorsTest("http://[::1]:%38%30", true),    // not allowed: % encoding only for non-ASCII
+        new ParseErrorsTest("http://[::1%25%41]", false),    // RFC 6874 allows over-escaping in zone
+        new ParseErrorsTest("http://[%10::1]", true),        // no %xx escapes in IP address
+        new ParseErrorsTest("http://[::1]/%48", false),      // %xx in path is fine
+        new ParseErrorsTest("http://%41:8080/", true),       // not allowed: % encoding only for non-ASCII
+        new ParseErrorsTest("mysql://x@y(z:123)/foo", true), // not well-formed per RFC 3986, golang.org/issue/33646
+        new ParseErrorsTest("mysql://x@y(1.2.3.4:123)/foo", true),
+
+        new ParseErrorsTest(" http://foo.com", true),  // invalid character in schema
+        new ParseErrorsTest("ht tp://foo.com", true),  // invalid character in schema
+        new ParseErrorsTest("ahttp://foo.com", false), // valid schema characters
+        new ParseErrorsTest("1http://foo.com", true),  // invalid character in schema
+
+        new ParseErrorsTest("http://[]%20%48%54%54%50%2f%31%2e%31%0a%4d%79%48%65%61%64%65%72%3a%20%31%32%33%0a%0a/", true), // golang.org/issue/11208
+        new ParseErrorsTest("http://a b.com/", true),    // no space in host name please
+        new ParseErrorsTest("cache_object://foo", true), // scheme cannot have _, relative path cannot have : in first segment
+        new ParseErrorsTest("cache_object:foo", true),
+        new ParseErrorsTest("cache_object:foo/bar", true),
+        new ParseErrorsTest("cache_object/:foo/bar", false)
+    );
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class ShouldEscapeTest {
+
+    public final char     in;
+    public final Encoding mode;
+    public final boolean  escape;
+
+  }
+
+  public static final List<ShouldEscapeTest> shouldEscapeTests;
+
+  static {
+    shouldEscapeTests = List.of(
+        // Unreserved characters (§2.3)
+        new ShouldEscapeTest('a', Encoding.Path, false),
+        new ShouldEscapeTest('a', Encoding.UserPassword, false),
+        new ShouldEscapeTest('a', Encoding.QueryComponent, false),
+        new ShouldEscapeTest('a', Encoding.Fragment, false),
+        new ShouldEscapeTest('a', Encoding.Host, false),
+        new ShouldEscapeTest('z', Encoding.Path, false),
+        new ShouldEscapeTest('A', Encoding.Path, false),
+        new ShouldEscapeTest('Z', Encoding.Path, false),
+        new ShouldEscapeTest('0', Encoding.Path, false),
+        new ShouldEscapeTest('9', Encoding.Path, false),
+        new ShouldEscapeTest('-', Encoding.Path, false),
+        new ShouldEscapeTest('-', Encoding.UserPassword, false),
+        new ShouldEscapeTest('-', Encoding.QueryComponent, false),
+        new ShouldEscapeTest('-', Encoding.Fragment, false),
+        new ShouldEscapeTest('.', Encoding.Path, false),
+        new ShouldEscapeTest('_', Encoding.Path, false),
+        new ShouldEscapeTest('~', Encoding.Path, false),
+
+        // User information (§3.2.1)
+        new ShouldEscapeTest(':', Encoding.UserPassword, true),
+        new ShouldEscapeTest('/', Encoding.UserPassword, true),
+        new ShouldEscapeTest('?', Encoding.UserPassword, true),
+        new ShouldEscapeTest('@', Encoding.UserPassword, true),
+        new ShouldEscapeTest('$', Encoding.UserPassword, false),
+        new ShouldEscapeTest('&', Encoding.UserPassword, false),
+        new ShouldEscapeTest('+', Encoding.UserPassword, false),
+        new ShouldEscapeTest(',', Encoding.UserPassword, false),
+        new ShouldEscapeTest(';', Encoding.UserPassword, false),
+        new ShouldEscapeTest('=', Encoding.UserPassword, false),
+
+        // Host (IP address, IPv6 address, registered name, port suffix; §3.2.2)
+        new ShouldEscapeTest('!', Encoding.Host, false),
+        new ShouldEscapeTest('$', Encoding.Host, false),
+        new ShouldEscapeTest('&', Encoding.Host, false),
+        new ShouldEscapeTest('\'', Encoding.Host, false),
+        new ShouldEscapeTest('(', Encoding.Host, false),
+        new ShouldEscapeTest(')', Encoding.Host, false),
+        new ShouldEscapeTest('*', Encoding.Host, false),
+        new ShouldEscapeTest('+', Encoding.Host, false),
+        new ShouldEscapeTest(',', Encoding.Host, false),
+        new ShouldEscapeTest(';', Encoding.Host, false),
+        new ShouldEscapeTest('=', Encoding.Host, false),
+        new ShouldEscapeTest(':', Encoding.Host, false),
+        new ShouldEscapeTest('[', Encoding.Host, false),
+        new ShouldEscapeTest(']', Encoding.Host, false),
+        new ShouldEscapeTest('0', Encoding.Host, false),
+        new ShouldEscapeTest('9', Encoding.Host, false),
+        new ShouldEscapeTest('A', Encoding.Host, false),
+        new ShouldEscapeTest('z', Encoding.Host, false),
+        new ShouldEscapeTest('_', Encoding.Host, false),
+        new ShouldEscapeTest('-', Encoding.Host, false),
+        new ShouldEscapeTest('.', Encoding.Host, false)
+    );
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class URLHostnameAndPortTest {
+
+    public final String in; // URL.host field
+    public final String host;
+    public final String port;
+
+  }
+
+  public static final List<URLHostnameAndPortTest> urlHostnameAndPortTests;
+
+  static {
+    urlHostnameAndPortTests = List.of(
+        new URLHostnameAndPortTest("foo.com:80", "foo.com", "80"),
+        new URLHostnameAndPortTest("foo.com", "foo.com", ""),
+        new URLHostnameAndPortTest("foo.com:", "foo.com", ""),
+        new URLHostnameAndPortTest("FOO.COM", "FOO.COM", ""), // no canonicalization
+        new URLHostnameAndPortTest("1.2.3.4", "1.2.3.4", ""),
+        new URLHostnameAndPortTest("1.2.3.4:80", "1.2.3.4", "80"),
+        new URLHostnameAndPortTest("[1:2:3:4]", "1:2:3:4", ""),
+        new URLHostnameAndPortTest("[1:2:3:4]:80", "1:2:3:4", "80"),
+        new URLHostnameAndPortTest("[::1]:80", "::1", "80"),
+        new URLHostnameAndPortTest("[::1]", "::1", ""),
+        new URLHostnameAndPortTest("[::1]:", "::1", ""),
+        new URLHostnameAndPortTest("localhost", "localhost", ""),
+        new URLHostnameAndPortTest("localhost:443", "localhost", "443"),
+        new URLHostnameAndPortTest("some.super.long.domain.example.org:8080", "some.super.long.domain.example.org", "8080"),
+        new URLHostnameAndPortTest("[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:17000", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", "17000"),
+        new URLHostnameAndPortTest("[2001:0db8:85a3:0000:0000:8a2e:0370:7334]", "2001:0db8:85a3:0000:0000:8a2e:0370:7334", ""),
+
+        // Ensure that even when not valid, Host is one of "Hostname",
+        // "Hostname:Port", "[Hostname]" or "[Hostname]:Port".
+        // See https://golang.org/issue/29098.
+        new URLHostnameAndPortTest("[google.com]:80", "google.com", "80"),
+        new URLHostnameAndPortTest("google.com]:80", "google.com]", "80"),
+        new URLHostnameAndPortTest("google.com:80_invalid_port", "google.com:80_invalid_port", ""),
+        new URLHostnameAndPortTest("[::1]extra]:80", "::1]extra", "80"),
+        new URLHostnameAndPortTest("google.com]extra:extra", "google.com]extra:extra", "")
+    );
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class EscapeBenchmarkCase {
+
+    public final String unescaped;
+    public final String query;
+    public final String path;
+
+  }
+
+  public static final List<EscapeBenchmarkCase> escapeBenchmarkCases;
+
+  static {
+    escapeBenchmarkCases = List.of(
+        new EscapeBenchmarkCase("one two", "one+two", "one%20two"),
+        new EscapeBenchmarkCase(
+            "Фотки собак",
+            "%D0%A4%D0%BE%D1%82%D0%BA%D0%B8+%D1%81%D0%BE%D0%B1%D0%B0%D0%BA",
+            "%D0%A4%D0%BE%D1%82%D0%BA%D0%B8%20%D1%81%D0%BE%D0%B1%D0%B0%D0%BA"),
+        new EscapeBenchmarkCase("shortrun(break)shortrun", "shortrun%28break%29shortrun", "shortrun%28break%29shortrun"),
+        new EscapeBenchmarkCase(
+            "longerrunofcharacters(break)anotherlongerrunofcharacters",
+            "longerrunofcharacters%28break%29anotherlongerrunofcharacters",
+            "longerrunofcharacters%28break%29anotherlongerrunofcharacters"),
+        new EscapeBenchmarkCase(
+            "padded/with+various%characters?that=need$some@escaping+paddedsowebreak/256bytes".repeat(4),
+            "padded%2Fwith%2Bvarious%25characters%3Fthat%3Dneed%24some%40escaping%2Bpaddedsowebreak%2F256bytes".repeat(4),
+            "padded%2Fwith+various%25characters%3Fthat=need$some@escaping+paddedsowebreak%2F256bytes".repeat(4))
+    );
+  }
+
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+  // ==================================================================================================== //
+
+  @AllArgsConstructor
+  public static class JoinPathTest {
+
+    public final String   base;
+    public final String[] elem;
+    public final String   out;
+
+  }
+
+  public static final List<JoinPathTest> joinPathTests;
+
+  static {
+    joinPathTests = List.of(
+        new JoinPathTest("https://go.googlesource.com", new String[]{"go"}, "https://go.googlesource.com/go"),
+        new JoinPathTest("https://go.googlesource.com/a/b/c", new String[]{"../../../go"}, "https://go.googlesource.com/go"),
+        new JoinPathTest("https://go.googlesource.com/", new String[]{"../go"}, "https://go.googlesource.com/go"),
+        new JoinPathTest("https://go.googlesource.com", new String[]{"../go"}, "https://go.googlesource.com/go"),
+        new JoinPathTest("https://go.googlesource.com", new String[]{"../go", "../../go", "../../../go"}, "https://go.googlesource.com/go"),
+        new JoinPathTest("https://go.googlesource.com/../go", null, "https://go.googlesource.com/go"),
+        new JoinPathTest("https://go.googlesource.com/", new String[]{"./go"}, "https://go.googlesource.com/go"),
+        new JoinPathTest("https://go.googlesource.com//", new String[]{"/go"}, "https://go.googlesource.com/go"),
+        new JoinPathTest("https://go.googlesource.com//", new String[]{"/go", "a", "b", "c"}, "https://go.googlesource.com/go/a/b/c"),
+        new JoinPathTest("http://[fe80::1%en0]:8080/", new String[]{"/go"}, ""),
+        new JoinPathTest("https://go.googlesource.com", new String[]{"go/"}, "https://go.googlesource.com/go/"),
+        new JoinPathTest("https://go.googlesource.com", new String[]{"go//"}, "https://go.googlesource.com/go/"),
+        new JoinPathTest("https://go.googlesource.com", null, "https://go.googlesource.com/"),
+        new JoinPathTest("https://go.googlesource.com/", null, "https://go.googlesource.com/"),
+        new JoinPathTest("https://go.googlesource.com/a%2fb", new String[]{"c"}, "https://go.googlesource.com/a%2fb/c"),
+        new JoinPathTest("https://go.googlesource.com/a%2fb", new String[]{"c%2fd"}, "https://go.googlesource.com/a%2fb/c%2fd"),
+        new JoinPathTest("https://go.googlesource.com/a/b", new String[]{"/go"}, "https://go.googlesource.com/a/b/go"),
+        new JoinPathTest("/", null, "/"),
+        new JoinPathTest("a", null, "a"),
+        new JoinPathTest("a", new String[]{"b"}, "a/b"),
+        new JoinPathTest("a", new String[]{"../b"}, "b"),
+        new JoinPathTest("a", new String[]{"../../b"}, "b"),
+        new JoinPathTest("", new String[]{"a"}, "a"),
+        new JoinPathTest("", new String[]{"../a"}, "a")
+    );
+  }
+
 }
