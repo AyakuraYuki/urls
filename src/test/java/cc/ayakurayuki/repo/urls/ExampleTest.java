@@ -139,7 +139,11 @@ public class ExampleTest {
 
   @Test
   public void exampleURL() {
-    URL u = URLs.Parse("http://bing.com/search?q=dotnot");
+    Result<URL, Exception> parsed = URLs.Parse("http://bing.com/search?q=dotnot");
+    if (parsed.isErr()) {
+      return;
+    }
+    URL u = parsed.ok();
     u.setScheme("https");
     u.setHost("google.com");
     Values v = u.query();
@@ -151,7 +155,7 @@ public class ExampleTest {
   @Test
   public void exampleURL_roundtrip() {
     // Parse + String preserve the original encoding.
-    URL u = URLs.Parse("https://example.com/foo%2fbar");
+    URL u = URLs.Parse("https://example.com/foo%2fbar").ok();
     assertEquals("/foo/bar", u.getPath());
     assertEquals("/foo%2fbar", u.getRawPath());
     assertEquals("https://example.com/foo%2fbar", u.toString());
@@ -159,8 +163,8 @@ public class ExampleTest {
 
   @Test
   public void exampleURL_resolveReference() {
-    URL u = URLs.Parse("../../..//search?q=dotnet");
-    URL base = URLs.Parse("http://example.com/directory/");
+    URL u = URLs.Parse("../../..//search?q=dotnet").ok();
+    URL base = URLs.Parse("http://example.com/directory/").ok();
     URL resolved = base.resolveReference(u);
     assertEquals("http://example.com/search?q=dotnet", resolved.toString());
   }
@@ -180,7 +184,7 @@ public class ExampleTest {
 
   @Test
   public void exampleURL_escapedPath() {
-    URL u = URLs.Parse("http://example.com/x/y%2Fz");
+    URL u = URLs.Parse("http://example.com/x/y%2Fz").ok();
     assertEquals("/x/y/z", u.getPath());
     assertEquals("/x/y%2Fz", u.getRawPath());
     assertEquals("/x/y%2Fz", u.escapedPath());
@@ -188,7 +192,7 @@ public class ExampleTest {
 
   @Test
   public void exampleURL_escapedFragment() {
-    URL u = URLs.Parse("http://example.com/#x/y%2Fz");
+    URL u = URLs.Parse("http://example.com/#x/y%2Fz").ok();
     assertEquals("x/y/z", u.getFragment());
     assertEquals("x/y%2Fz", u.getRawFragment());
     assertEquals("x/y%2Fz", u.escapedFragment());
@@ -196,9 +200,9 @@ public class ExampleTest {
 
   @Test
   public void exampleURL_hostname() {
-    URL u = URLs.Parse("https://example.org:8000/path");
+    URL u = URLs.Parse("https://example.org:8000/path").ok();
     assertEquals("example.org", u.hostname());
-    u = URLs.Parse("https://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:17000");
+    u = URLs.Parse("https://[2001:0db8:85a3:0000:0000:8a2e:0370:7334]:17000").ok();
     assertEquals("2001:0db8:85a3:0000:0000:8a2e:0370:7334", u.hostname());
   }
 
@@ -207,9 +211,9 @@ public class ExampleTest {
     // you can get the actual username by calling URL.username(),
     // or get empty value if URL.user is <null>
 
-    URL u = URLs.Parse("https://example.org:8000/path");
+    URL u = URLs.Parse("https://example.org:8000/path").ok();
     assertEquals("", u.username());
-    u = URLs.Parse("https://user@example.org/path");
+    u = URLs.Parse("https://user@example.org/path").ok();
     assertEquals("user", u.username());
   }
 
@@ -218,9 +222,9 @@ public class ExampleTest {
     // you can get the actual password by calling URL.password(),
     // or get empty value if URL.user is <null>
 
-    URL u = URLs.Parse("https://example.org:8000/path");
+    URL u = URLs.Parse("https://example.org:8000/path").ok();
     assertEquals("", u.password());
-    u = URLs.Parse("https://user:abc@example.org/path");
+    u = URLs.Parse("https://user:abc@example.org/path").ok();
     assertEquals("abc", u.password());
   }
 
@@ -229,9 +233,9 @@ public class ExampleTest {
     // you can get the actual password-set flag by calling URL.isPasswordSet(),
     // or get false if URL.user is <null>
 
-    URL u = URLs.Parse("https://example.org:8000/path");
+    URL u = URLs.Parse("https://example.org:8000/path").ok();
     assertFalse(u.isPasswordSet());
-    u = URLs.Parse("https://user:boys@example.org/path");
+    u = URLs.Parse("https://user:boys@example.org/path").ok();
     assertTrue(u.isPasswordSet());
   }
 
@@ -247,7 +251,7 @@ public class ExampleTest {
 
   @Test
   public void exampleURL_parse() {
-    URL u = URLs.Parse("https://example.org");
+    URL u = URLs.Parse("https://example.org").ok();
     URL rel = u.parse("/foo");
     assertEquals("https://example.org/foo", rel.toString());
     try {
@@ -259,15 +263,15 @@ public class ExampleTest {
 
   @Test
   public void exampleURL_port() {
-    URL u = URLs.Parse("https://example.org");
+    URL u = URLs.Parse("https://example.org").ok();
     assertEquals("", u.port());
-    u = URLs.Parse("https://example.org:8080");
+    u = URLs.Parse("https://example.org:8080").ok();
     assertEquals("8080", u.port());
   }
 
   @Test
   public void exampleURL_query() {
-    URL u = URLs.Parse("https://example.org/?a=1&a=2&b=&=3&&&&");
+    URL u = URLs.Parse("https://example.org/?a=1&a=2&b=&=3&&&&").ok();
     Values q = u.query();
 
     List<String> wants = List.of("1", "2");
@@ -305,7 +309,7 @@ public class ExampleTest {
 
   @Test
   public void exampleURL_requestURI() {
-    URL u = URLs.Parse("https://example.org/path?foo=bar");
+    URL u = URLs.Parse("https://example.org/path?foo=bar").ok();
     assertEquals("/path?foo=bar", u.requestURI());
   }
 

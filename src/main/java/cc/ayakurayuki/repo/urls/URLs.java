@@ -380,12 +380,12 @@ public abstract class URLs {
    * The string url is assumed not to have a #fragment suffix.
    * (Web browsers strip #fragment before sending the URL to a web server.)
    */
-  public static URL ParseRequestURI(String rawURL) {
-    Result<URL, Throwable> result = parse(rawURL, true);
-    if (result.isErr()) {
-      throw new UrlException("parse", rawURL, result.err());
+  public static Result<URL, Exception> ParseRequestURI(String rawURL) {
+    Result<URL, Throwable> parsed = parse(rawURL, true);
+    if (parsed.isErr()) {
+      return Result.err(new UrlException("parse", rawURL, parsed.err()));
     }
-    return result.ok();
+    return Result.ok(parsed.ok());
   }
 
   /**
@@ -886,7 +886,7 @@ public abstract class URLs {
   public static Result<String, Exception> JoinPath(String base, String... elem) {
     Result<URL, Exception> parseResult = Parse(base);
     if (parseResult.isErr()) {
-      return Result.ok("");
+      return Result.err("", parseResult.err());
     }
     URL url = parseResult.ok();
     String u = url.joinPath(elem).toString();

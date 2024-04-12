@@ -62,6 +62,7 @@ public class CaseTest {
       Result<URL, Exception> parsed = URLs.Parse(tt.in());
       if (parsed.isErr()) {
         fail(String.format("Parse(\"%s\") returned error %s", tt.in(), parsed.err().getMessage()));
+        continue;
       }
       URL u = parsed.ok();
       assertEquals(String.format("Parse(%s)\n\tgot:  %s\n\twant: %s\n", tt.in(), ufmt(u), ufmt(tt.out())), tt.out(), u);
@@ -71,26 +72,20 @@ public class CaseTest {
   @Test
   public void testParseRequestURI() {
     for (ParseRequestURLTest test : Cases.parseRequestURLTests) {
-      try {
-        URLs.ParseRequestURI(test.url);
-        if (!test.expectedValid) {
-          fail(String.format("ParseRequestURI(%s) gave no err; want some error", test.url));
-        }
-      } catch (Exception e) {
-        if (test.expectedValid) {
-          fail(String.format("ParseRequestURI(%s) gave err %s; want no error", test.url, e.getMessage()));
-        }
+      Exception err = URLs.ParseRequestURI(test.url).err();
+      if (test.expectedValid && err != null) {
+        fail(String.format("ParseRequestURI(%s) gave err %s; want no error", test.url, err.getMessage()));
+      } else if (!test.expectedValid && err == null) {
+        fail(String.format("ParseRequestURI(%s) gave no err; want some error", test.url));
       }
     }
 
-    URL u = URL.empty;
-    try {
-      u = URLs.ParseRequestURI(Cases.pathThatLooksSchemeRelative);
-    } catch (Exception e) {
-      fail(String.format("Unexpected error %s", e.getMessage()));
+    Result<URL, Exception> parsed = URLs.ParseRequestURI(Cases.pathThatLooksSchemeRelative);
+    if (parsed.isErr()) {
+      fail(String.format("Unexpected error %s", parsed.err().getMessage()));
     }
-    if (!Strings.equals(u.getPath(), Cases.pathThatLooksSchemeRelative)) {
-      fail(String.format("ParseRequestURI path:\n\tgot  %s\n\twant %s\n", u.getPath(), Cases.pathThatLooksSchemeRelative));
+    if (!Strings.equals(parsed.ok().getPath(), Cases.pathThatLooksSchemeRelative)) {
+      fail(String.format("ParseRequestURI path:\n\tgot  %s\n\twant %s\n", parsed.ok().getPath(), Cases.pathThatLooksSchemeRelative));
     }
   }
 
@@ -99,8 +94,7 @@ public class CaseTest {
     for (URLTest tt : Cases.urlTests) {
       Result<URL, Exception> parsed = URLs.Parse(tt.in());
       if (parsed.isErr()) {
-        fail(String.format("Parse(\"%s\") returned error %s", tt.in(, parsed.err().getMessage())));
-        continue;
+        fail(String.format("Parse(\"%s\") returned error %s", tt.in(), parsed.err().getMessage()));
       }
       URL u = parsed.ok();
       String expected = tt.in();
@@ -218,11 +212,10 @@ public class CaseTest {
     }
   }
 
-  private URL mustParse(String invokeFrom, String url) {
+  private URL mustParse(String url) {
     Result<URL, Exception> parsed = URLs.Parse(url);
     if (parsed.isErr()) {
-      fail(String.format("[invoke from %s] Parse(\"%s\") got error %s", invokeFrom, url, parsed.err().getMessage()));
-      return null;
+      fail(String.format("[testResolveReference] Parse(\"%s\") got error %s", url, parsed.err().getMessage()));
     }
     return parsed.ok();
   }
@@ -231,8 +224,8 @@ public class CaseTest {
   public void testResolveReference() {
     URL opaque = URL.builder().scheme("scheme").opaque("opaque").build();
     for (ResolveTest test : Cases.resolveReferenceTests) {
-      URL base = mustParse("testResolveReference", test.base);
-      URL rel = mustParse("testResolveReference", test.ref);
+      URL base = mustParse(test.base);
+      URL rel = mustParse(test.ref);
       URL url = base.resolveReference(rel);
       String got = url.toString();
       assertEquals(String.format("URL(%s).resolveReference(%s)\n\tgot  %s\n\twant %s", test.base, test.ref, got, test.expected), test.expected, got);
@@ -462,6 +455,17 @@ public class CaseTest {
       Exception err = joinPathResult.err();
       if (!Strings.equals(out, tt.out) || ((err == null) != (Strings.isNotEmpty(tt.out)))) {
         fail(String.format("JoinPath(\"%s\", \"%s\") = \"%s\", %s; want \"%s\", %s", tt.base, Arrays.toString(tt.elem), out, err, tt.out, wantErr));
+      }
+
+      Result<URL, Exception> parsed = URLs.Parse(tt.base);
+      URL u = parsed.ok();
+      err = parsed.err();
+      if (!parsed.isErr()) {
+        u = u.joinPath(tt.elem);
+        out = u.toString();
+      }
+      if (!Strings.equals(out, tt.out) || ((err == null) != (Strings.isNotEmpty(tt.out)))) {
+        fail(String.format("Parse(\"%s\").joinPath(\"%s\") = \"%s\", %s; want \"%s\", %s", tt.base, Arrays.toString(tt.elem), out, err, tt.out, wantErr));
       }
     }
   }

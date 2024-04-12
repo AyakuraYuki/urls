@@ -365,7 +365,9 @@ public class URL implements Serializable {
   public URL joinPath(String... elem) {
     List<String> list = new ArrayList<>();
     list.add(this.escapedPath());
-    list.addAll(Arrays.asList(elem));
+    if (elem != null) {
+      list.addAll(Arrays.asList(elem));
+    }
     String[] elements = list.toArray(String[]::new);
     String p;
     if (!Strings.startsWith(elements[0], "/")) {
