@@ -6,7 +6,7 @@
 
   <groupId>cc.ayakurayuki.repo</groupId>
   <artifactId>urls</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>1.0.0</version>
   <name>urls</name>
   <description>urls is a url parser and builder, transplanted from `net/url` in Golang.</description>
   <url>https://github.com/AyakuraYuki/urls</url>
